@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Çılgın Kalp Avcısı</title>
+    <style>
+        /* --- (Mevcut stil kodun aynen buraya gelecek) --- */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Poppins', sans-serif;
+            background: none;
+        }
+
+        #gameCanvas {
+            display: block;
+        }
+
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            font-size: 1rem;
+            color: #d6336c;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+        }
+
+        #hud div {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 6px 14px;
+            border-radius: 8px;
+            border: 2px solid #f782b1;
+        }
+
+        #joystick {
+            position: absolute;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.6);
+            border: 3px solid #d6336c;
+            border-radius: 50%;
+            touch-action: none;
+            user-select: none;
+        }
+
+        #stick {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: #d6336c;
+            border: 3px solid #f782b1;
+            border-radius: 50%;
+            left: 35px;
+            top: 35px;
+            user-select: none;
+        }
+
+        #backBtn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 1.1rem;
+            background: #fff;
+            color: #d6336c;
+            border: 2px solid #f782b1;
+            border-radius: 10px;
+            padding: 6px 12px;
+            text-decoration: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+
+        #background-gif {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('assets/images/halloween_set_BG.gif') no-repeat center center fixed;
+            background-size: cover;
+            opacity: 0.8;
+            z-index: -1;
+            pointer-events: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="background-gif"></div>
+    <a href="index.html" id="backBtn">⇦</a>
+    <canvas id="gameCanvas"></canvas>
+    <div id="hud">
+        <div id="score">Skor: 0</div>
+        <div id="level">Seviye: 1</div>
+        <div id="remaining">Kalp: 0</div>
+    </div>
+    <div id="joystick">
+        <div id="stick"></div>
+    </div>
+
+    <script>
+        // ===============================
+        // 1) GENEL DEĞİŞKEN TANIMLARI
+        // ===============================
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let cw = canvas.width = window.innerWidth;
+        let ch = canvas.height = window.innerHeight;
+        window.addEventListener('resize', () => {
+            cw = canvas.width = window.innerWidth;
+            ch = canvas.height = window.innerHeight;
+        });
+
+        // HUD elemanları
+        const scoreEl = document.getElementById('score');
+        const levelEl = document.getElementById('level');
+        const remEl = document.getElementById('remaining');
+
+        // Yürüyen karakter frameleri (seninki zaten var)
+        const frameCount = 8;
+        const charFrames = [];
+        for (let i = 0; i < frameCount; i++) {
+            const img = new Image();
+            img.src = `assets/images/frame_${i}_delay-0.1s.png`;
+            charFrames.push(img);
+        }
+        let currentFrame = 3, frameTimer = 0;
+        const frameInterval = 100;
+        let animating = false;
+
+        // --- 1.a) ÜZGÜN BALONCUK AYARLARI ---
+        const sadMessages = [
+            "Biraz tuhaf her şey.",
+            "Bir şey kırılmış gibi.",
+            "Bir şeyler eksik.",
+            "Ben de bilmiyorum...",
+            "Hiçbir şey tanıdık gelmiyor.",
+            "Oyun neden zorlaşmıyor",
+            "Zaten yeterince zor",
+            "Bir tık yoruldum…",
+            "Saklanmak istiyorum.",
+            "Keşke başka bir şey toplasaydım…",
+            "Ne başlamak istiyorum ne bitirmek.",
+            "Bunları artık toplamak istemiyorum :(",
+            "Sadece durmak istiyorum.",
+            "Ne kadar daha sürecek bu? :(",
+            "Devam edemem gibi...",
+            "Bu böyle nereye kadar?",
+            "Bir şey değişmiyor.",
+            "Alıştım sanırım.",
+            "Devam ediyorum, ama neden bilmiyorum.",
+            "Boşuna çabalıyorum.",
+            "İyi hissetmiyorum.",
+            "Her şey aynı.",
+            "Zor gelmeye başladı.",
+            "Sadece izliyorum.",
+            "Bir durup düşündüm.",
+            "Susmak en kolayıydı.",
+            "Devam etmek zor.",
+            "İstemesem de oluyor.",
+            "İçim garip.",
+            "Çok şey geçti aklımdan.",
+            "Hiçbir şeye şaşırmıyorum.",
+            "Sadece geçmesini bekliyorum.",
+        ];
+        let nextMessageIndex = 0;
+        let bubbleActive = false;
+        let bubbleText = "";
+        let bubbleTimer = 0;
+        const bubbleDuration = 2000; // ms
+
+        // Kaç kalp toplandı, bir sonraki baloncuk eşiği
+        let collectedSinceBubble = 0;
+        let nextThreshold = 4 + Math.floor(Math.random() * 3); // 3 veya 4
+
+        // Oyuncu objesi
+        const player = { x: cw / 2, y: ch / 2, size: 85, speed: 5, vx: 0, vy: 0 };
+
+        // ===============================
+        // 2) HEART SINIFI (DEĞİŞMEDİ)
+        // ===============================
+        const heartEmojis = ['💔'];
+        class Heart {
+            constructor(x, y, size, speed) {
+                this.x = x; this.y = y; this.size = size; this.speed = speed;
+                this.vx = (Math.random() * 2 - 1) * speed;
+                this.vy = (Math.random() * 2 - 1) * speed;
+                this.emoji = heartEmojis[Math.floor(Math.random() * heartEmojis.length)];
+            }
+            draw() {
+                ctx.font = `${this.size}px serif`;
+                ctx.fillText(this.emoji, this.x, this.y);
+            }
+            update(level) {
+                /* --- Mevcut hareket mantığın aynen buraya gelecek --- */
+                const dx = this.x - player.x, dy = this.y - player.y;
+                const dist = Math.hypot(dx, dy) || 1;
+                const flee = dist < 100 ? { x: dx / dist, y: dy / dist } : { x: 0, y: 0 };
+                let avoid = { x: 0, y: 0 }, m = 80;
+                if (this.x < m) avoid.x = 1; else if (this.x > cw - m) avoid.x = -1;
+                if (this.y < m) avoid.y = 1; else if (this.y > ch - m) avoid.y = -1;
+                const center = { x: cw / 2 - this.x, y: ch / 2 - this.y };
+                const cd = Math.hypot(center.x, center.y) || 1;
+                const toC = { x: center.x / cd, y: center.y / cd };
+                const jit = { x: (Math.random() * 2 - 1) * 1.2, y: (Math.random() * 2 - 1) * 1.2 };
+                const wAway = 0.2, wAvoid = 0.2, wCenter = 0.2, wJit = 0.2;
+                const base = this.speed + level * 0.1;
+                const spr = dist < player.size * 1.5 ? 3 : 1;
+                const tvx = (flee.x * wAway + avoid.x * wAvoid + toC.x * wCenter + jit.x * wJit) * base * spr;
+                const tvy = (flee.y * wAway + avoid.y * wAvoid + toC.y * wCenter + jit.y * wJit) * base * spr;
+                this.vx += (tvx - this.vx) * 0.12;
+                this.vy += (tvy - this.vy) * 0.12;
+                this.x += this.vx; this.y += this.vy;
+                if (this.x < this.size) this.x = this.size, this.vx *= -0.7;
+                if (this.x > cw - this.size) this.x = cw - this.size, this.vx *= -0.7;
+                if (this.y < this.size) this.y = this.size, this.vy *= -0.7;
+                if (this.y > ch - this.size) this.y = ch - this.size, this.vy *= -0.7;
+            }
+            collide() {
+                return Math.hypot(this.x - player.x, this.y - player.y) < (this.size + player.size) / 2;
+            }
+        }
+
+        let hearts = [], score = 0, level = 1, transitioning = false;
+
+        // ===============================
+        // 3) SEVİYE BAŞLATMA
+        // ===============================
+        function startLevel() {
+            hearts = [];
+            const count = 4;
+            for (let i = 0; i < count; i++) {
+                hearts.push(new Heart(
+                    Math.random() * (cw - 60) + 30,
+                    Math.random() * (ch - 60) + 30,
+                    30 + Math.random() * 20,
+                    0.8 + level * 0.1
+                ));
+            }
+            levelEl.textContent = `Seviye: ${level}`;
+            remEl.textContent = `Kalp: ${hearts.length}`;
+            transitioning = false;
+        }
+
+        // ===============================
+        // 4) JOYSTICK KONTROLLERİ (DEĞİŞMEDİ)
+        // ===============================
+        const joy = document.getElementById('joystick');
+        const stick = document.getElementById('stick');
+        let dragging = false, origin = { x: 0, y: 0 };
+
+        joy.addEventListener('pointerdown', e => {
+            e.preventDefault(); dragging = true;
+            origin = { x: e.clientX, y: e.clientY };
+            animating = true; currentFrame = 0; frameTimer = 0;
+        });
+        window.addEventListener('pointermove', e => {
+            if (!dragging) return;
+            let dx = e.clientX - origin.x, dy = e.clientY - origin.y;
+            const d = Math.hypot(dx, dy);
+            if (d > 40) { dx = dx / d * 40; dy = dy / d * 40; }
+            stick.style.transform = `translate(${dx}px,${dy}px)`;
+            player.vx = dx / 40 * player.speed;
+            player.vy = dy / 40 * player.speed;
+        });
+        window.addEventListener('pointerup', e => {
+            dragging = false;
+            stick.style.transform = 'translate(0,0)';
+            player.vx = player.vy = 0;
+            animating = false; currentFrame = 3;
+        });
+
+        // ===============================
+        // 5) OYUN DÖNGÜSÜ
+        // ===============================
+        function gameLoop(ts) {
+            ctx.clearRect(0, 0, cw, ch);
+
+            // -- 5.a) Oyuncu Pozisyon Güncelle
+            player.x = Math.max(player.size / 2, Math.min(cw - player.size / 2, player.x + player.vx));
+            player.y = Math.max(player.size / 2, Math.min(ch - player.size / 2, player.y + player.vy));
+
+            // -- 5.b) Baloncuk Aktifse Çiz
+            if (bubbleActive) {
+                const elapsed = ts - bubbleTimer;
+                if (elapsed < bubbleDuration) {
+                    const pad = 15;
+                    ctx.font = "18px Poppins, sans-serif";
+                    const textW = ctx.measureText(bubbleText).width;
+                    const bx = player.x - textW / 2 - pad;
+                    const by = player.y - player.size / 2 - 40;
+                    const bw = textW + pad * 2;
+                    const bh = 24 + pad;
+
+                    // Kutu
+                    ctx.fillStyle = "rgba(255,255,255,0.9)";
+                    ctx.strokeStyle = "#333";
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.roundRect(bx, by, bw, bh, 8);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Kuyruk
+                    ctx.beginPath();
+                    ctx.moveTo(player.x - 5, by + bh);
+                    ctx.lineTo(player.x + 5, by + bh);
+                    ctx.lineTo(player.x, by + bh + 10);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Metin
+                    ctx.fillStyle = "#333";
+                    ctx.fillText(bubbleText, bx + pad, by + pad + 4);
+                } else {
+                    bubbleActive = false;
+                }
+            }
+
+            // -- 5.c) Sprite Animasyonu
+            if (animating && ts - frameTimer > frameInterval) {
+                currentFrame = (currentFrame + 1) % frameCount;
+                frameTimer = ts;
+            }
+            const img = charFrames[currentFrame];
+            if (img.complete) {
+                ctx.save();
+                if (player.vx < 0) {
+                    ctx.translate(player.x, player.y);
+                    ctx.scale(-1, 1);
+                    ctx.drawImage(img, -player.size / 2, -player.size / 2, player.size, player.size);
+                } else {
+                    ctx.drawImage(img, player.x - player.size / 2, player.y - player.size / 2, player.size, player.size);
+                }
+                ctx.restore();
+            }
+
+            // -- 5.d) Kalpler & Çarpışma
+            for (let i = hearts.length - 1; i >= 0; i--) {
+                const h = hearts[i];
+                h.update(level);
+                h.draw();
+                if (h.collide()) {
+                    hearts.splice(i, 1);
+                    score++;
+                    scoreEl.textContent = `Skor: ${score}`;
+                    remEl.textContent = `Kalp: ${hearts.length}`;
+
+                    // ----- BALONCUK TETİKLEME -----
+                    collectedSinceBubble++;
+                    if (collectedSinceBubble >= nextThreshold) {
+                        bubbleActive = true;
+
+                        // sıralı mesaj çek
+                        bubbleText = sadMessages[nextMessageIndex];
+                        nextMessageIndex = (nextMessageIndex + 1) % sadMessages.length;
+
+                        bubbleTimer = ts;
+                        collectedSinceBubble = 0;
+                        nextThreshold = 3 + Math.floor(Math.random() * 2);
+                    }
+                }
+            }
+
+            // -- 5.e) Seviye Atla
+            if (!transitioning && hearts.length === 0) {
+                transitioning = true;
+                level++;
+                setTimeout(startLevel, 700);
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // ===============================
+        // 6) BAŞLAT
+        // ===============================
+        startLevel();
+        requestAnimationFrame(gameLoop);
+
+    </script>
+</body>
+
+</html>
