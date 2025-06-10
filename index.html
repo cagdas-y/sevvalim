@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geri Sayım</title>
+    <style>
+        body {
+            background: #fff;
+            color: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            padding: 0 1rem;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 8vw;
+            margin: 0.5em 0;
+            text-transform: uppercase;
+            line-height: 1.2;
+        }
+
+        #countdown {
+            font-size: 6vw;
+            margin-top: 0.5em;
+        }
+
+        #notice {
+            margin-top: 1em;
+            font-size: 4vw;
+            color: #555;
+        }
+
+        @media (min-width: 600px) {
+            h1 {
+                font-size: 3rem;
+            }
+
+            #countdown {
+                font-size: 2rem;
+            }
+
+            #notice {
+                font-size: 1.2rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <h1>KEŞKE KARŞIMDA GERÇEKTEN HAKEDEN BİRİ OLSAYDI</h1>
+    <div id="countdown">Yükleniyor...</div>
+    <div id="notice">c@Admin/-r; Bu Siteye Otomatik Silinme Talimati Verildi.</div>
+
+    <script>
+        function updateCountdown() {
+            const now = new Date();
+            let year = now.getFullYear();
+            let month = now.getMonth(); // 0-indexed
+            // Hesaplama: bir sonraki ayın 10'una
+            let targetMonth = month + 1;
+            if (targetMonth > 11) { targetMonth = 0; year += 1; }
+            const targetDate = new Date(year, targetMonth, 10, 0, 0, 0);
+            let diff = targetDate - now;
+            if (diff <= 0) {
+                document.getElementById('countdown').textContent = '@@.';
+                clearInterval(timerInterval);
+                return;
+            }
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            diff %= (1000 * 60 * 60 * 24);
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            diff %= (1000 * 60 * 60);
+            const minutes = Math.floor(diff / (1000 * 60));
+            diff %= (1000 * 60);
+            const seconds = Math.floor(diff / 1000);
+            document.getElementById('countdown').textContent =
+                `${days} gün ${hours.toString().padStart(2, '0')} saat ` +
+                `${minutes.toString().padStart(2, '0')} dakika ` +
+                `${seconds.toString().padStart(2, '0')} saniye kaldı`;
+        }
+        updateCountdown();
+        const timerInterval = setInterval(updateCountdown, 1000);
+    </script>
+</body>
+
+</html>
